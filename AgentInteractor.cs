@@ -12,13 +12,15 @@ public class AgentInteractor : MonoBehaviour {
     float currentcooldowntime;
     float agentspeed;
     Vector3 agentDestination;
+
+    float timeSpentFetching;
     
     GameObject attacktarget;
     EnemyController attacktargetcontroller;
 
     GameObject pickuptarget;
     Vector3 carrytargetoffset;
-    KeyValuePair<int, Vector3> pickupCarryIndexAndPositionOffset;
+    public KeyValuePair<int, Vector3> pickupCarryIndexAndPositionOffset;
     
     int errorcount = 0;
     float navStopDistanceBackup;
@@ -41,10 +43,15 @@ public class AgentInteractor : MonoBehaviour {
 	void Update () {
         if (agentcontroller.gameController.isGrounded(agentcontroller.gameObject, agentcontroller.distToGround))
         {
-            if (agentcontroller.agentState != AgentState.Idle) // idle state expected to set its own destination via dismiss
+            if (agentcontroller.agentState == AgentState.Midair && !agentcontroller.throwingWait) // grounded after midair => just landed
+            {
+                agentcontroller.dismiss();
+            }
+
+            if (agentcontroller.agentState != AgentState.Idle && agentcontroller.agentState != AgentState.Midair) // idle state expected to set its own destination via dismiss
                 agentcontroller.setDelayedDestination(agentDestination);
 
-            if (agentcontroller.agentState == AgentState.Following) // todo: move this to start-following (whistle) method
+            if (agentcontroller.agentState == AgentState.Following)
             {
                 //clear variables for other actions:
                 attacktarget = null;
@@ -66,6 +73,7 @@ public class AgentInteractor : MonoBehaviour {
             }
             else if (agentcontroller.agentState == AgentState.Fetching)
             {
+                timeSpentFetching += Time.deltaTime;
                 agentnav.stoppingDistance = 0;
                 tryfetch();
             }
@@ -78,6 +86,14 @@ public class AgentInteractor : MonoBehaviour {
                 docarry();
             }
         }
+    }
+
+    public IEnumerator CheckForActions()
+    {
+        //Debug.Log("checking for nearby actions");
+        interactionSphere.enabled = false;
+        yield return new WaitForSeconds(0.1f);
+        interactionSphere.enabled = true;
     }
 
     private void OnTriggerEnter(Collider other)
@@ -111,6 +127,7 @@ public class AgentInteractor : MonoBehaviour {
                 agentcontroller.activate();
                 trypickup(other.gameObject);
             }
+            agentcontroller.gameController.updatePikNumbersAndUI();
         }
         else
         {
@@ -220,6 +237,7 @@ public class AgentInteractor : MonoBehaviour {
             {
                 pickupCarryIndexAndPositionOffset = targetController.getFreeCarryIndexAndOffset(this.gameObject);
                 agentcontroller.agentState = AgentState.Fetching;
+                timeSpentFetching = 0;
             }
         }
         else
@@ -239,7 +257,7 @@ public class AgentInteractor : MonoBehaviour {
         // todo: if on top of pickup, move to the side
 
         // if fetch target exists
-        if (pickuptarget && pickupCarryIndexAndPositionOffset.Key != -1)
+        if (timeSpentFetching < 5 && pickuptarget && pickupCarryIndexAndPositionOffset.Key != -1)
         {
             PickupController targetController = target.GetComponentInChildren<PickupController>();
             // if at carry point location
@@ -288,7 +306,7 @@ public class AgentInteractor : MonoBehaviour {
             }
             else // not at carry point location yet
             {
-                Debug.Log("pik is approaching pickup. distance: " + Vector3.Distance(this.transform.position, target.transform.position + pickupCarryIndexAndPositionOffset.Value) + " with required distance 1");
+                //Debug.Log("pik is approaching pickup. distance: " + Vector3.Distance(this.transform.position, target.transform.position + pickupCarryIndexAndPositionOffset.Value) + " with required distance 1");
 
                 // check whether carry point was taken already - if so, get new carry point
                 if (targetController.checkIfCarryPointOccupied(pickupCarryIndexAndPositionOffset.Key))
@@ -301,11 +319,19 @@ public class AgentInteractor : MonoBehaviour {
                 agentDestination = target.transform.position + pickupCarryIndexAndPositionOffset.Value;
             }
         }
+        else if (timeSpentFetching >= 5 || !pickuptarget)
+        {
+            resetNav();
+            agentcontroller.dismiss();
+            timeSpentFetching = 0;
+        }
     }
 
     void maintainhold()
     {
+        agentcontroller.nonTriggerCollider.enabled = false;
         agentDestination = pickuptarget.transform.position + pickupCarryIndexAndPositionOffset.Value;
+        this.transform.parent.LookAt(pickuptarget.transform);
         if (agentcontroller) 
         {
             //todo: need to locate the right sound effect, and delay between repeats
@@ -334,75 +360,111 @@ public class AgentInteractor : MonoBehaviour {
             targetposition.z - transform.position.z);
 
         agentcontroller.agentState = AgentState.Carrying;
+        agentnav.speed = agentspeed * 0.5f;
+        agentnav.stoppingDistance = navStopDistanceBackup;
+
         if (agentcontroller)
         {
             agentcontroller.soundPlayer.loop = false;
             agentcontroller.soundPlayer.clip = agentcontroller.liftClip;
             agentcontroller.soundPlayer.Play();
         }
-        agentnav.speed = agentspeed * 0.5f;
-        agentnav.stoppingDistance = navStopDistanceBackup;
         
         startingcarry = true;
     }
 
     bool startingcarry;
-    void docarry() // todo: move this to pickup controller, pair all but one agent to the pickup itself rather than the pickup's destination
+    void docarry()
     {
         agentnav.stoppingDistance = 0.1f;
-
-        // get destination, check that destination is still correct
-        PickupController targetController = pickuptarget.GetComponentInChildren<PickupController>();
-        agentDestination = targetController.getPickupDestination() - carrytargetoffset;
-
-        // update pickuptarget's position
-        Transform pickuptargetparent = pickuptarget.transform.parent;
-        pickuptargetparent.transform.position = this.transform.position + carrytargetoffset; // todo: what if agent falls off? check real game
-        if (agentcontroller && startingcarry)
-        {
-            agentcontroller.soundPlayer.loop = true;
-            agentcontroller.soundPlayer.clip = agentcontroller.carryClip;
-            agentcontroller.soundPlayer.Play();
-            startingcarry = false;
-        }
-        
-        // when destination is reached, drop object
-        if (Vector3.Distance(transform.position, agentDestination) <= agentnav.stoppingDistance * 3)
+        if (!pickuptarget)
         {
             dropobject();
+        }
+        else
+        {
+            this.transform.parent.LookAt(pickuptarget.transform);
+            
+            PickupController targetController = pickuptarget.GetComponentInChildren<PickupController>();
+            if (targetController)
+            {
+                // leader agent moves the pickup towards the destination, other agents maintain their carry position
+                if (pickupCarryIndexAndPositionOffset.Key == targetController.leaderPikIndex)
+                {
+                    agentnav.avoidancePriority = 10;
+                    agentnav.radius = 1;
+                    agentDestination = targetController.getPickupDestination() - carrytargetoffset;
+
+                    // update pickup's position
+                    Transform pickuptargetparent = pickuptarget.transform.parent;
+                    pickuptargetparent.transform.position = this.transform.position + carrytargetoffset; // todo: what if agent falls off? check real game
+
+                    // when destination is reached, drop pickup
+                    if (Vector3.Distance(transform.position, agentDestination) <= agentnav.stoppingDistance)
+                    {
+                        dropobject();
+                    }
+                }
+                else
+                {
+                    agentnav.avoidancePriority = 1;
+                    agentnav.radius = 1;
+                    agentDestination = pickuptarget.transform.position - carrytargetoffset;
+                }
+
+                if (agentcontroller && startingcarry)
+                {
+                    agentcontroller.soundPlayer.loop = true;
+                    agentcontroller.soundPlayer.clip = agentcontroller.carryClip;
+                    agentcontroller.soundPlayer.Play();
+                    startingcarry = false;
+                }
+            }
+            else
+            {
+                Debug.LogError("Pickup controller not found for carrying");
+            }
         }
     }
 
     public void dropobject()
     {
         // remove agent from pickup
-        PickupController targetController = pickuptarget.GetComponentInChildren<PickupController>();
-        if (targetController)
+        if (pickuptarget)
         {
-            Debug.Log("removing agent from pickup");
-            targetController.removeAgentFromCarryPoint(this.gameObject, pickupCarryIndexAndPositionOffset.Key);
-        }
-        else
-        {
-            Debug.Log("Couldn't find pickup controller");
-        }
-        agentnav.speed = agentspeed * 2;
+            PickupController targetController = pickuptarget.GetComponentInChildren<PickupController>();
+            if (targetController)
+            {
+                targetController.removeAgentFromCarryPoint(this.gameObject, pickupCarryIndexAndPositionOffset.Key);
+            }
+            else
+            {
+                Debug.Log("Couldn't find pickup controller");
+            }
 
-        // reset pickup's rigidbody constraints
-        if (pickuptarget.GetComponent<Rigidbody>())
-        {
-            pickuptarget.GetComponent<Rigidbody>().constraints = RigidbodyConstraints.None;
+            // reset pickup's rigidbody constraints
+            if (pickuptarget.GetComponent<Rigidbody>())
+            {
+                pickuptarget.GetComponent<Rigidbody>().constraints = RigidbodyConstraints.None;
+            }
+            if (pickuptarget.transform.parent.GetComponent<Rigidbody>())
+            {
+                pickuptarget.transform.parent.GetComponent<Rigidbody>().constraints = RigidbodyConstraints.None;
+            }
         }
-        if (pickuptarget.transform.parent.GetComponent<Rigidbody>())
-        {
-            pickuptarget.transform.parent.GetComponent<Rigidbody>().constraints = RigidbodyConstraints.None;
-        }
-
-        // clear pickup target
+        resetNav();
         pickuptarget = null;
-
-        // dismiss agent
         agentcontroller.agentState = AgentState.Idle;
         agentcontroller.dismiss(); // todo: if player nearby, follow instead of idling
+    }
+
+    void resetNav()
+    {
+        agentcontroller.nonTriggerCollider.enabled = true;
+        agentnav.speed = agentspeed * 2;
+        agentnav.radius = 5;
+        agentnav.avoidancePriority = 1;
+        agentnav.stoppingDistance = navStopDistanceBackup;
+        agentDestination = this.transform.position;
     }
 }

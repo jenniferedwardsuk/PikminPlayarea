@@ -12,6 +12,7 @@ public class PickupUIController : MonoBehaviour {
     public Text topNumber;
     public Text middleBar;
     public Text bottomNumber;
+    public Transform pickupTransform;
 
     GameObject mainCamera;
     PickupController pickupController;
@@ -25,7 +26,11 @@ public class PickupUIController : MonoBehaviour {
 	
 	void Update ()
     {
-        //point canvas at camera
+        //place canvas above pickup and point at camera
+        //Vector3 pickupPosition = pickupTransform.position;
+        //pickupPosition.x = 0;
+        //Vector3 UIposition = new Vector3(0, pickupPosition.z * -1/2, pickupPosition.x * -1/2);
+        //this.transform.position = UIposition;
         this.transform.LookAt(mainCamera.transform);
         if (!pickupController)
         {

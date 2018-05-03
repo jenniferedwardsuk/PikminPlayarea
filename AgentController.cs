@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 
-public enum AgentState { Idle, Following, Attacking, Fetching, Holding, Carrying, Immobilised };
+public enum AgentState { Idle, Following, Attacking, Fetching, Holding, Carrying, Immobilised, Midair };
 public enum AgentIdleAnims { None, Waving, Searching, Yawning, Somersaulting, Sitting, Sleeping};
 
 public class AgentController : MonoBehaviour
@@ -101,13 +101,21 @@ public class AgentController : MonoBehaviour
         agentState = AgentState.Idle;        // todo: agents should separate into colour groups
         agentTarget = transform.position;
         this.nonTriggerCollider.enabled = true;
-        
+
+        AgentInteractor agentInteractor = GetComponentInChildren<AgentInteractor>();
+        if (agentInteractor) // check for interactables nearby
+        {
+            StartCoroutine(agentInteractor.CheckForActions());
+        }
+
         if (agentColour == "blue")
             smr.material = greyblueTex;
         else if (agentColour == "yellow")
             smr.material = greyyellowTex;
         else
             smr.material = greyredTex;
+
+        gameController.updatePikNumbersAndUI();
     }
 
     bool idleAnimFired = true;
@@ -192,6 +200,7 @@ public class AgentController : MonoBehaviour
             if (rb)
                 rb.velocity = new Vector3(0, 0, 0);
         }
+
         if (gameController.isGrounded(this.gameObject, distToGround) && !nav.enabled && !throwingWait) //has just landed after being thrown
         {
             gravforce = new Vector3(0, 0, 0);
@@ -227,6 +236,7 @@ public class AgentController : MonoBehaviour
             if (agentState != AgentState.Following)
                 anim.SetTrigger("Surprised");
             agentState = AgentState.Following;
+            gameController.updatePikNumbersAndUI();
         }
     }
 

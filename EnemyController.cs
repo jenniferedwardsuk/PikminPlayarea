@@ -277,6 +277,7 @@ public class EnemyController : MonoBehaviour {
         soundPlayer2.clip = killPikClip;
         soundPlayer2.Play();
         Destroy(currenttarget);
+        gameController.updatePikNumbersAndUI();
         enemyState = EnemyState.Hunting;
     }
 

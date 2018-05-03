@@ -25,6 +25,7 @@ public class PikController : MonoBehaviour {
     GameObject whistleCircle;
     MeshRenderer whistlemesh;
     public bool throwing;
+    float throwingCooldownTime = 0.2f;
     public bool whistling;
 
     public float distToGround;
@@ -186,23 +187,31 @@ public class PikController : MonoBehaviour {
                     heldposition.z -= 1;
 
                 //grabbedpik.GetComponent<AgentController>().triggercollider.enabled = false;
+                grabbedpik.GetComponent<AgentController>().agentState = AgentState.Immobilised;
                 grabbedpik.transform.position = heldposition; // todo: replace with agent destination and wait for their approach in coroutine
-                grabbedpik.GetComponent<AgentController>().throwingWait = true;
-                grabbedpik.GetComponent<AgentController>().agentState = AgentState.Idle;
-                grabbedpik.GetComponent<UnityEngine.AI.NavMeshAgent>().enabled = false;
+                grabbedpik.GetComponent<NavMeshAgent>().enabled = false;
 
                 //prepareThrowClip.Play(); // todo: throw preparation will only apply when the player can hold down the button to postpone a throw
                 yield return new WaitForSeconds(0.1f);
-                throwClip.Play();
+
+                grabbedpik.GetComponent<AgentController>().throwingWait = true;
+                grabbedpik.GetComponent<AgentController>().agentState = AgentState.Idle;
+
+                if (grabbedpik.GetComponentInChildren<AgentInteractor>())
+                    grabbedpik.GetComponentInChildren<AgentInteractor>().interactionSphere.enabled = false;
+                grabbedpik.GetComponent<NavMeshAgent>().enabled = false;
 
                 // apply force to thrown agent: upward + directional towards cursor
                 grabbedpik.GetComponent<Rigidbody>().AddForce(
                     new Vector3(0, 30, 0) * grabbedpik.GetComponent<Rigidbody>().mass + (cursor.transform.position - transform.position).normalized * 100,
                     ForceMode.Impulse);
+                throwClip.Play();
+                grabbedpik.GetComponent<AgentController>().agentState = AgentState.Midair;
 
-                yield return new WaitForSeconds(0.2f);
-                grabbedpik.GetComponent<AgentController>().nonTriggerCollider.enabled = true;
+                yield return new WaitForSeconds(throwingCooldownTime);
+
                 grabbedpik.GetComponent<AgentController>().throwingWait = false;
+                grabbedpik.GetComponent<AgentController>().nonTriggerCollider.enabled = true;
                 throwing = false;
 
             }
