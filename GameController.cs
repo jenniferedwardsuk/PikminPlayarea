@@ -22,6 +22,11 @@ public class GameController : MonoBehaviour {
 
     public float spawnagentcount;
 
+    GameObject mainUIcanvas;
+    UIController mainUI;
+    int _followingPiksCount;
+    int _fieldPiksCount;
+    int _totalPiksCount;
 
     void Start()
     {
@@ -93,7 +98,22 @@ public class GameController : MonoBehaviour {
                 headmesh.sharedMesh = flowermesh;
             }
         }
-        
+
+        //set UI numbers
+        mainUIcanvas = GameObject.FindGameObjectWithTag("MainUI");
+        if (!mainUIcanvas)
+        {
+            Debug.Log("Main UI canvas object not found");
+        }
+        else
+        {
+            mainUI = GameObject.FindGameObjectWithTag("MainUI").GetComponent<UIController>();
+            if (!mainUI)
+            {
+                Debug.Log("Main UI script not found");
+            }
+        }
+        updatePikNumbersAndUI();
     }
     
     void Update() {
@@ -145,6 +165,47 @@ public class GameController : MonoBehaviour {
             }
         }
         return agent;
+    }
+
+    public void updatePikNumbersAndUI()
+    {
+        int onionPiksTotal = 0; // todo: onions to be able to store unspawned pikmin
+        List<GameObject> allAgents = GameObject.FindGameObjectsWithTag("Agent").ToList<GameObject>();
+        List<GameObject> followingAgents = allAgents.FindAll(x => x.GetComponent<AgentController>() && x.GetComponent<AgentController>().agentState == AgentState.Following);
+        _followingPiksCount = followingAgents.Count;
+        _fieldPiksCount = allAgents.Count;
+        _totalPiksCount = allAgents.Count + onionPiksTotal; 
+        setUI();
+    }
+
+    public void setUI()
+    {
+        if (mainUI)
+        {
+            mainUI.UpdateUINumbers(_followingPiksCount, _fieldPiksCount, _totalPiksCount);
+        }
+    }
+
+    public int followingPiksCount
+    {
+        get
+        {
+            return _followingPiksCount;
+        }
+    }
+    public int fieldPiksCount
+    {
+        get
+        {
+            return _fieldPiksCount;
+        }
+    }
+    public int totalPiksCount
+    {
+        get
+        {
+            return _totalPiksCount;
+        }
     }
 }
 

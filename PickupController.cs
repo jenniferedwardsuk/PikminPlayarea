@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using System.Linq;
 
 public enum PickupType { Food, Treasure };
 
@@ -11,6 +12,7 @@ public class PickupController : MonoBehaviour {
     public float pickupCircleRadius; //to determine size of agents' circle
     public PickupType pickupType;
     public Vector3 destination;
+    bool nearDestination;
 
     Transform redonionspawnpoint;
     Transform blueonionspawnpoint;
@@ -18,8 +20,10 @@ public class PickupController : MonoBehaviour {
 
     [HideInInspector] public List<KeyValuePair<float, GameObject>> carryPoints;
 
-    PickupUIController pickupUIController;
-    
+    public PickupUIController pickupUIController;
+    GameObject leaderPik;
+    public float leaderPikIndex = -2;
+
     void Start () {
         //set up carry points with angles and agent slots
         carryPoints = new List<KeyValuePair<float, GameObject>>();
@@ -29,16 +33,16 @@ public class PickupController : MonoBehaviour {
             carryPoints.Add(new KeyValuePair<float, GameObject>(i * carryDegrees, null));
         }
 
-        pickupUIController = GetComponentInChildren<PickupUIController>();
+        //pickupUIController = GetComponentInChildren<PickupUIController>();
         if (!pickupUIController)
         {
-            Debug.Log("Pickup UI controller not found for " + this.gameObject);
+            Debug.LogError("Pickup UI controller not found for " + this.gameObject);
         }
         else
         {
             pickupUIController.setTopText(0, 0);
             pickupUIController.setBottomText(requiredAgents, 0);
-        }
+        }   
 
         //populate onion spawnpoints
         GameController gameController = GameObject.FindGameObjectWithTag("GameController").GetComponent<GameController>();
@@ -50,49 +54,95 @@ public class PickupController : MonoBehaviour {
         }
         else
         {
-            Debug.Log("Game controller not found for pickup");
+            Debug.LogError("Game controller not found for pickup");
         }
         destination = new Vector3(0, 1, 0);
     }
 	
 	void Update () {
-
-	}
+        if (nearDestination)
+        {
+            checkIfReachedDestination(); // can't do this in an ontriggerenter - it needs to be centred
+        }
+    }
 
     private void OnTriggerEnter(Collider other)
     {
-        if (other.tag == "OnionCenter")
+        if (other.tag == "OnionCenter" && pickupType == PickupType.Food)
         {
-            this.gameObject.tag = "Untagged";
-            // remove carrying agents
-            for (int i = 0; i < carryPoints.Count; i++)
+            nearDestination = true;
+        }
+    }
+
+    private void checkIfReachedDestination()
+    {
+        List<GameObject> validDestinations = new List<GameObject>();
+        if (pickupType == PickupType.Food)
+        {
+            validDestinations = GameObject.FindGameObjectsWithTag("OnionCenter").ToList<GameObject>();
+        }
+        else if (pickupType == PickupType.Treasure)
+        {
+            // todo: treasure pickups
+        }
+        bool done = false;
+        float minDistance = 100f;
+        foreach(GameObject dest in validDestinations)
+        {
+            if (!done)
             {
-                if (carryPoints[i].Value != null)
+                Vector3 flattenedDestination = dest.transform.position;
+                flattenedDestination.y = 0f;
+                Vector3 flattenedPickup = this.transform.position;
+                flattenedPickup.y = 0f;
+                if (Vector3.Distance(flattenedDestination, flattenedPickup) < 0.5f)
                 {
-                    AgentInteractor agentInteractor = carryPoints[i].Value.GetComponentInChildren<AgentInteractor>();
-                    if (agentInteractor)
-                    {
-                        agentInteractor.dropobject();
-                    }
+                    done = true;
+                    doCollection();
+                }
+                if (Vector3.Distance(flattenedDestination, flattenedPickup) < minDistance)
+                {
+                    minDistance = Vector3.Distance(flattenedDestination, flattenedPickup);
                 }
             }
-            if (this.gameObject.transform.parent) // on plain items the pickup controller is on the top object
-            {
-                Destroy(this.gameObject.transform.parent.gameObject);
-            }
-            else // on enemy bodies the pickup controller is on a child object
-            {
-                Destroy(this.gameObject);
-            }
-            //todo: pulled-up-into-onion anim, spawn pik seeds or create new piks in onion, etc
         }
+        if (minDistance > 20f)
+        {
+            nearDestination = false;
+        }
+    }
+
+    void doCollection()
+    {
+        this.gameObject.tag = "Untagged";
+        // remove carrying agents
+        for (int i = 0; i < carryPoints.Count; i++)
+        {
+            if (carryPoints[i].Value != null)
+            {
+                AgentInteractor agentInteractor = carryPoints[i].Value.GetComponentInChildren<AgentInteractor>();
+                if (agentInteractor)
+                {
+                    agentInteractor.dropobject();
+                }
+            }
+        }
+        if (this.gameObject.transform.parent) // on enemy bodies the pickup controller is on a child object 
+        {
+            Destroy(this.gameObject.transform.parent.gameObject);
+        }
+        else // on plain items the pickup controller is on the top object
+        {
+            Destroy(this.gameObject);
+        }
+
+        // todo: pulled-up-into-onion anim, spawn pik seeds or create new piks in onion, etc
     }
 
     public bool checkIfCarryable()
     {
         bool carryable = false;
         carryable = carryPoints.FindAll(x => x.Value != null).Count >= requiredAgents;
-        Debug.Log("carry check, current agents: " + carryPoints.FindAll(x => x.Value != null).Count + " out of " + requiredAgents);
         return carryable;
     }
 
@@ -146,7 +196,7 @@ public class PickupController : MonoBehaviour {
             }
             else
             {
-                Debug.Log("Couldn't find floor for pickup carry point at position " + this.transform.position);
+                Debug.LogError("Couldn't find floor for pickup carry point at position " + this.transform.position);
                 returnValue = new KeyValuePair<int, Vector3>(-1, new Vector3(0, 0, 0));
             }
         }
@@ -171,7 +221,7 @@ public class PickupController : MonoBehaviour {
     {
         if (carryPointIndex > carryPoints.Count)
         {
-            Debug.Log("Agent requested nonexistent carry point");
+            Debug.LogError("Agent requested nonexistent carry point");
             return false;
         }
         else if (carryPoints[carryPointIndex].Value != null) // another agent already took the spot
@@ -182,6 +232,10 @@ public class PickupController : MonoBehaviour {
         { 
             // assign agent to carry point
             carryPoints[carryPointIndex] = new KeyValuePair<float, GameObject>(carryPoints[carryPointIndex].Key, agent);
+            if (!leaderPik && carryPoints.FindAll(x => x.Value != null).Count >= requiredAgents)
+            {
+                setNewLeaderPik();
+            }
             updateUIText();
             return true;
         }
@@ -196,21 +250,47 @@ public class PickupController : MonoBehaviour {
         }
         else if (carryPointIndex > carryPoints.Count)
         {
-            Debug.Log("Agent trying to leave nonexistent carry point");
+            Debug.LogError("Agent trying to leave nonexistent carry point");
             return false;
         }
         else if (carryPoints[carryPointIndex].Value == null 
             || carryPoints[carryPointIndex].Value != agent) // agent already left spot
         {
-            Debug.Log("Agent trying to leave empty/wrong carry point");
+            Debug.LogError("Agent trying to leave empty/wrong carry point");
             return false;
         }
         else
         {
             // remove agent from carry point
+            GameObject removedAgent = carryPoints[carryPointIndex].Value;
             carryPoints[carryPointIndex] = new KeyValuePair<float, GameObject>(carryPoints[carryPointIndex].Key, null);
+            if (removedAgent && removedAgent == leaderPik)
+            {
+                setNewLeaderPik();
+            }
             updateUIText();
             return true;
+        }
+    }
+
+    void setNewLeaderPik()
+    {
+        List<KeyValuePair<float, GameObject>> carryingAgents = carryPoints.FindAll(x => x.Value != null);
+        int lastAgentIndex = carryingAgents.Count - 1;
+        KeyValuePair<float, GameObject> lastCarryingAgent = new KeyValuePair<float, GameObject>();
+        if (lastAgentIndex >= 0)
+        {
+            lastCarryingAgent = carryingAgents[lastAgentIndex];
+        }
+        if (lastCarryingAgent.Value && carryingAgents.Count >= requiredAgents)
+        {
+            leaderPik = lastCarryingAgent.Value;
+            leaderPikIndex = carryPoints.IndexOf(lastCarryingAgent);
+        }
+        else
+        {
+            leaderPik = null;
+            leaderPikIndex = -2;
         }
     }
 
@@ -250,34 +330,41 @@ public class PickupController : MonoBehaviour {
         return carryCount;
     }
 
+    public int[] getPikColourCounts()
+    {
+        List<KeyValuePair<float, GameObject>> carryPointsWithAgents = carryPoints.FindAll(x => x.Value != null);
+        int bluecount = 0;
+        int redcount = 0;
+        int yellowcount = 0;
+        AgentController agentController;
+        for (int i = 0; i < carryPointsWithAgents.Count; i++)
+        {
+            agentController = null;
+            agentController = carryPointsWithAgents[i].Value.transform.parent.GetComponent<AgentController>();
+            if (agentController)
+            {
+                if (agentController.agentColour == "blue")
+                    bluecount += 1;
+                if (agentController.agentColour == "red")
+                    redcount += 1;
+                if (agentController.agentColour == "yellow")
+                    yellowcount += 1;
+            }
+        }
+
+        int[] pikColours = new int[3] { bluecount, redcount, yellowcount };        
+        return pikColours;
+    }
+
     public Vector3 getPickupDestination()
     {
         if (pickupType == PickupType.Food)
         {
-            // count carrying agents' colours
-            List<KeyValuePair<float, GameObject>> carryPointsWithAgents = carryPoints.FindAll(x => x.Value != null);
-            Debug.Log("agents carrying: " + carryPointsWithAgents.Count);
-            int bluecount = 0;
-            int redcount = 0;
-            int yellowcount = 0;
-            AgentController agentController;
-            for (int i = 0; i < carryPointsWithAgents.Count; i++)
-            {
-                agentController = null;
-                agentController = carryPointsWithAgents[i].Value.transform.parent.GetComponent<AgentController>();
-                if (agentController)
-                {
-                    if (agentController.agentColour == "blue")
-                        bluecount += 1;
-                    if (agentController.agentColour == "red")
-                        redcount += 1;
-                    if (agentController.agentColour == "yellow")
-                        yellowcount += 1;
-                }
-            }
-            Debug.Log("destination check: bluecount " + bluecount + " yellowcount " + yellowcount + " redcount " + redcount);
-
-            // set destination point
+            int[] pikColours = getPikColourCounts();
+            int bluecount = pikColours[0];
+            int redcount = pikColours[1];
+            int yellowcount = pikColours[2];
+            
             if (bluecount > redcount && bluecount > yellowcount)
             {
                 destination = blueonionspawnpoint.position;
