@@ -10,7 +10,7 @@ public class AgentInteractor : MonoBehaviour {
     AgentController agentcontroller;
     public float attackcooldowntime;
     float currentcooldowntime;
-    float agentspeed;
+    float agentFullSpeed;
     Vector3 agentDestination;
 
     float timeSpentFetching;
@@ -33,11 +33,11 @@ public class AgentInteractor : MonoBehaviour {
         }
         else
         {
-            Debug.Log("Agent controller not found for " + transform.parent.gameObject);
+            Debug.LogError("Agent controller not found for " + transform.parent.gameObject);
         }
         currentcooldowntime = attackcooldowntime * 0.5f;
         navStopDistanceBackup = agentnav.stoppingDistance;
-        agentspeed = agentnav.speed;
+        agentFullSpeed = agentnav.speed;
     }
 	
 	void Update () {
@@ -49,7 +49,9 @@ public class AgentInteractor : MonoBehaviour {
             }
 
             if (agentcontroller.agentState != AgentState.Idle && agentcontroller.agentState != AgentState.Midair) // idle state expected to set its own destination via dismiss
+            {
                 agentcontroller.setDelayedDestination(agentDestination);
+            }
 
             if (agentcontroller.agentState == AgentState.Following)
             {
@@ -90,7 +92,6 @@ public class AgentInteractor : MonoBehaviour {
 
     public IEnumerator CheckForActions()
     {
-        //Debug.Log("checking for nearby actions");
         interactionSphere.enabled = false;
         yield return new WaitForSeconds(0.1f);
         interactionSphere.enabled = true;
@@ -99,7 +100,7 @@ public class AgentInteractor : MonoBehaviour {
     private void OnTriggerEnter(Collider other)
     {
         errorcount += 1;
-        if (agentcontroller) // todo: disable trigger when thrown, until isgrounded
+        if (agentcontroller)
         {
             if ((other.gameObject.tag == "Enemy" || (other.transform.parent != null && other.transform.parent.gameObject.tag == "Enemy"))
                 && agentcontroller.agentState == AgentState.Idle)
@@ -118,24 +119,40 @@ public class AgentInteractor : MonoBehaviour {
                 }
                 else
                 {
-                    Debug.Log("Couldn't find enemy controller for " + attacktarget);
+                    Debug.LogError("Couldn't find enemy controller for " + attacktarget);
                 }
                 tryattack(attacktarget);
             }
+
             if (other.gameObject.tag == "Pickup" && agentcontroller.agentState == AgentState.Idle)
             {
-                agentcontroller.activate();
-                trypickup(other.gameObject);
+                PickupController targetController = other.gameObject.GetComponentInChildren<PickupController>();
+                if (targetController)
+                {
+                    if (!targetController.maxAgentsReached())
+                    {
+                        agentcontroller.activate();
+                        trypickup(other.gameObject);
+                    }
+                }
             }
+            
+            if (other.gameObject.tag == "Agent" && other.gameObject.GetComponent<AgentController>().agentState == AgentState.Drowning
+                && agentcontroller.agentColour == "blue" && agentcontroller.agentState == AgentState.Idle
+                && !agentcontroller.rescuing)
+            {
+                StartCoroutine(agentcontroller.WaterRescue(other.gameObject));
+            }
+
             agentcontroller.gameController.updatePikNumbersAndUI();
         }
         else
         {
-            Debug.Log("Agent controller not found for " + transform.parent.gameObject);
+            Debug.LogError("Agent controller not found for " + transform.parent.gameObject);
         }
     }
 
-    // todo: attacking and carrying animations
+    // todo: create attacking and carrying animations
 
     void tryattack(GameObject target)
     {
@@ -181,7 +198,6 @@ public class AgentInteractor : MonoBehaviour {
                 }
                 else
                 {
-                    Debug.Log("target health is " + attacktargetcontroller.health);
                     if (agentcontroller)
                     {
                         agentcontroller.soundPlayer.loop = false;
@@ -242,7 +258,7 @@ public class AgentInteractor : MonoBehaviour {
         }
         else
         {
-            Debug.Log("Couldn't find pickup controller for " + target);
+            Debug.LogError("Couldn't find pickup controller for " + target);
             pickuptarget = null;
             pickupCarryIndexAndPositionOffset = new KeyValuePair<int, Vector3>(-1, new Vector3(0,0,0));
             agentcontroller.agentState = AgentState.Idle;
@@ -360,7 +376,6 @@ public class AgentInteractor : MonoBehaviour {
             targetposition.z - transform.position.z);
 
         agentcontroller.agentState = AgentState.Carrying;
-        agentnav.speed = agentspeed * 0.5f;
         agentnav.stoppingDistance = navStopDistanceBackup;
 
         if (agentcontroller)
@@ -391,9 +406,11 @@ public class AgentInteractor : MonoBehaviour {
                 // leader agent moves the pickup towards the destination, other agents maintain their carry position
                 if (pickupCarryIndexAndPositionOffset.Key == targetController.leaderPikIndex)
                 {
-                    agentnav.avoidancePriority = 10;
+                    agentnav.avoidancePriority = 101;
+                    agentnav.speed = agentFullSpeed * 0.75f * ((float)targetController.getCurrentCarryCount() / targetController.maxAgents);
                     agentnav.radius = 1;
                     agentDestination = targetController.getPickupDestination() - carrytargetoffset;
+
 
                     // update pickup's position
                     Transform pickuptargetparent = pickuptarget.transform.parent;
@@ -439,7 +456,7 @@ public class AgentInteractor : MonoBehaviour {
             }
             else
             {
-                Debug.Log("Couldn't find pickup controller");
+                Debug.LogError("Couldn't find pickup controller");
             }
 
             // reset pickup's rigidbody constraints
@@ -461,7 +478,7 @@ public class AgentInteractor : MonoBehaviour {
     void resetNav()
     {
         agentcontroller.nonTriggerCollider.enabled = true;
-        agentnav.speed = agentspeed * 2;
+        agentnav.speed = agentFullSpeed;
         agentnav.radius = 5;
         agentnav.avoidancePriority = 1;
         agentnav.stoppingDistance = navStopDistanceBackup;

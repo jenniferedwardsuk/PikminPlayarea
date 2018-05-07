@@ -10,6 +10,8 @@ public class PickupController : MonoBehaviour {
     public float requiredAgents;
     public float maxAgents;
     public float pickupCircleRadius; //to determine size of agents' circle
+    public float seedsGiven;
+    public string pickupColor;
     public PickupType pickupType;
     public Vector3 destination;
     bool nearDestination;
@@ -245,7 +247,7 @@ public class PickupController : MonoBehaviour {
     {
         if (carryPointIndex == -1)
         {
-            Debug.Log("agent trying to leave default carry point");
+            Debug.LogError("Agent trying to leave default carry point");
             return false;
         }
         else if (carryPointIndex > carryPoints.Count)
@@ -302,6 +304,7 @@ public class PickupController : MonoBehaviour {
             Color textColour = new Color32(50, 50, 50, 255);
             if (carryCount >= requiredAgents)
             {
+                getPickupDestination();
                 if (destination == yellowonionspawnpoint.position)
                 {
                     textColour = new Color32(200, 200, 0, 255);
@@ -313,6 +316,10 @@ public class PickupController : MonoBehaviour {
                 else if (destination == blueonionspawnpoint.position)
                 {
                     textColour = new Color32(0, 0, 200, 255);
+                }
+                else
+                {
+                    textColour = new Color32(200, 200, 200, 255);
                 }
             }
             byte opacity = 255;
@@ -364,7 +371,7 @@ public class PickupController : MonoBehaviour {
             int bluecount = pikColours[0];
             int redcount = pikColours[1];
             int yellowcount = pikColours[2];
-            
+
             if (bluecount > redcount && bluecount > yellowcount)
             {
                 destination = blueonionspawnpoint.position;

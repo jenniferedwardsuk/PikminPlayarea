@@ -9,21 +9,11 @@ public class UIController : MonoBehaviour {
     public Text fieldCount;
     public Text totalCount;
     GameController gameController;
-
-	// Use this for initialization
+    
 	void Start () {
-        //gameController = GameObject.FindGameObjectWithTag("GameController").GetComponent<GameController>();
-        //if (gameController)
-        //{
-        //    gameController.setUI();
-        //}
-        //else
-        //{
-        //    Debug.Log("Game controller not found for setting UI");
-        //}
+
 	}
 	
-	// Update is called once per frame
 	void Update () {
 		
 	}

@@ -14,21 +14,31 @@ public class PikController : MonoBehaviour {
     float camRayLength = 100f; 
     Quaternion lastRotation;    // Used to stop the player's rotation when they stop moving.
 
-    // separated audio sources to allow sound overlap
-    public AudioSource throwClip;
-    public AudioSource prepareThrowClip;
-    public AudioSource whistleStartClip;
-    public AudioSource whistleClip;
-    
+    // separate audio sources to allow sound overlap
+    public AudioSource whistleStartSFX;
+    public AudioSource whistleSFX;
+    public AudioSource throwingSFX;
+    public AudioSource miscSoundPlayer;
+    public AudioClip throwClip;
+    public AudioClip prepareThrowClip;
+    public AudioClip enterWaterClip;
+
     GameController gameController;
     GameObject cursor;
+    public GameObject cursorMesh;
     GameObject whistleCircle;
     MeshRenderer whistlemesh;
+    public bool whistling;
+    float whistleTimeout;
+
+    bool prepareThrow;
     public bool throwing;
     float throwingCooldownTime = 0.2f;
-    public bool whistling;
+    GameObject grabbedpik;
+    string nearestAgentColor;
 
     public float distToGround;
+    ConstantForce constForce;
 
     void Awake()
     {
@@ -41,29 +51,58 @@ public class PikController : MonoBehaviour {
         if (whistleCircle)
             whistlemesh = whistleCircle.GetComponent<MeshRenderer>();
         whistling = false;
+        whistleTimeout = 0;
 
         gameController = GameObject.FindGameObjectWithTag("GameController").GetComponent<GameController>();
 
         distToGround = GetComponent<CapsuleCollider>().bounds.extents.y;
+        constForce = this.GetComponent<ConstantForce>();
+
+        nearestAgentColor = "none";
     }
 
-    void FixedUpdate()
+    private void Update()
     {
-        if (rb)
-            rb.velocity = new Vector3(0, 0, 0); //prevent collision interference with player-controlled movement
-
-        float h = Input.GetAxisRaw("Horizontal");
-        float v = Input.GetAxisRaw("Vertical");
-        Move(h, v);
+        if (grabbedpik)
+        {
+            if (nearestAgentColor != grabbedpik.GetComponent<AgentController>().agentColour)
+            {
+                nearestAgentColor = grabbedpik.GetComponent<AgentController>().agentColour;
+                setCursorColour(nearestAgentColor);
+            }
+        }
+        else
+        {
+            GameObject nearestAgent = gameController.getNearestEnabledAgent(this.gameObject, includePlayer: false, followingAgentsOnly: true, groundedOnly: true);
+            if (nearestAgent)
+            {
+                if (nearestAgentColor != nearestAgent.GetComponent<AgentController>().agentColour)
+                {
+                    nearestAgentColor = nearestAgent.GetComponent<AgentController>().agentColour;
+                    setCursorColour(nearestAgentColor);
+                }
+            }
+            else
+            {
+                nearestAgentColor = "none";
+                setCursorColour(nearestAgentColor);
+            }
+        }
 
         // On left-click: turn player to face the mouse cursor and try to throw an agent
         if (Input.GetMouseButton(0))
         {
             Turning();
-            if (!throwing)
+            if (!throwing && !grabbedpik)
             {
-                StartCoroutine("TryThrow");
+                prepareThrow = true;
+                StartCoroutine("TryPrepareThrow");
             }
+        }
+        if (!Input.GetMouseButton(0) && !throwing && prepareThrow)
+        {
+            StartCoroutine("TryThrow");
+            prepareThrow = false;
         }
 
         if (Input.GetKeyDown("q"))
@@ -73,26 +112,58 @@ public class PikController : MonoBehaviour {
 
         if (Input.GetKey("e"))
         {
-            activateWhistle();
+            if (whistleTimeout < 1.56f)
+            {
+                activateWhistle();
+                whistleTimeout += Time.deltaTime;
+            }
+            else
+            {
+                deactivateWhistle();
+            }
         }
         else
         {
             deactivateWhistle();
+            whistleTimeout = 0;
         }
 
+        float h = Input.GetAxisRaw("Horizontal");
+        float v = Input.GetAxisRaw("Vertical");
+        Move(h, v);
         // Animate the player.
-        Animating(h, v);       
+        Animating(h, v);
+    }
+
+    void FixedUpdate()
+    {
+        if (rb)
+            rb.velocity = new Vector3(0, 0, 0); //prevent collision interference with player-controlled movement
+
+        if (!gameController.isGrounded(this.gameObject, distToGround))
+        {
+            Vector3 gravForce = constForce.force;
+            gravForce.y -= 20;
+            constForce.force = gravForce;
+        }
+        else
+        {
+            constForce.force = new Vector3(0, -20, 0);
+        }
     }
 
     void activateWhistle()
     {
         if (!whistling)
         {
-            whistleStartClip.Play();
-            whistleClip.Play();
+            whistleStartSFX.Play();
+            whistleSFX.Play();
         }
         whistling = true;
-        whistlemesh.material.SetColor("_TintColor", new Color32(255, 255, 255, 255)); //todo: whistle particle effects
+        Color whistleColor = whistlemesh.material.color;
+        whistleColor.a = 1;
+        whistlemesh.material.color = whistleColor;
+
         if (whistleCircle.transform.localScale.x < 20)
             whistleCircle.transform.localScale += whistleCircle.transform.localScale * 4f * Time.deltaTime;
 
@@ -103,11 +174,26 @@ public class PikController : MonoBehaviour {
 
     void deactivateWhistle()
     {
-        whistleStartClip.Stop();
-        whistleClip.Stop();
+        whistleStartSFX.Stop();
+        whistleSFX.Stop();
         whistling = false;
-        whistlemesh.material.SetColor("_TintColor", new Color32(255, 255, 255, 0));
+        Color whistleColor = whistlemesh.material.color;
+        whistleColor.a = 0;
+        whistlemesh.material.color = whistleColor;
         whistleCircle.transform.localScale = new Vector3(1, 1, 1);
+    }
+
+    private void OnTriggerEnter(Collider other)
+    {
+        if (other.gameObject.tag == "Water")
+        {
+            miscSoundPlayer.clip = enterWaterClip;
+            miscSoundPlayer.Play();
+        }
+        else if (other.gameObject.layer == 8) // floor
+        {
+            miscSoundPlayer.clip = null; // todo: choose footstep SFX
+        }
     }
 
     void dismiss()
@@ -168,61 +254,83 @@ public class PikController : MonoBehaviour {
         anim.SetBool("IsWalking", walking);
     }
 
+    IEnumerator TryPrepareThrow()
+    {
+        grabbedpik = gameController.getNearestEnabledAgent(this.gameObject, false, true, false);
+        if (grabbedpik)
+        {
+            grabbedpik.GetComponent<AgentController>().agentState = AgentState.Immobilised;
+            grabbedpik.GetComponent<NavMeshAgent>().enabled = false;
+            throwingSFX.clip = prepareThrowClip;
+            throwingSFX.Play();
+        }
+        while (grabbedpik && !throwing)
+        {
+            Vector3 heldposition = this.transform.position - this.transform.forward;           
+            grabbedpik.transform.position = heldposition; // todo: replace with agent destination and wait for their approach
+
+            yield return new WaitForSeconds(0);
+        }
+    }
+
     IEnumerator TryThrow()
     {
         throwing = true;
-        while (throwing)
+        if (grabbedpik)
         {
-            GameObject grabbedpik = gameController.getNearestEnabledAgent(this.gameObject, false, true, false);
-            if (grabbedpik)
-            {
-                Vector3 heldposition = this.transform.position;
-                if (heldposition.x >= 0)
-                    heldposition.x += 1;
-                else
-                    heldposition.x -= 1;
-                if (heldposition.z >= 0)
-                    heldposition.z += 1;
-                else
-                    heldposition.z -= 1;
+            grabbedpik.GetComponent<AgentController>().throwingWait = true;
+            grabbedpik.GetComponent<AgentController>().agentState = AgentState.Idle;
 
-                //grabbedpik.GetComponent<AgentController>().triggercollider.enabled = false;
-                grabbedpik.GetComponent<AgentController>().agentState = AgentState.Immobilised;
-                grabbedpik.transform.position = heldposition; // todo: replace with agent destination and wait for their approach in coroutine
-                grabbedpik.GetComponent<NavMeshAgent>().enabled = false;
+            if (grabbedpik.GetComponentInChildren<AgentInteractor>())
+                grabbedpik.GetComponentInChildren<AgentInteractor>().interactionSphere.enabled = false;
+            grabbedpik.GetComponent<NavMeshAgent>().enabled = false;
 
-                //prepareThrowClip.Play(); // todo: throw preparation will only apply when the player can hold down the button to postpone a throw
-                yield return new WaitForSeconds(0.1f);
+            // apply force to thrown agent
+            Vector3 verticalForce = new Vector3(0, 30, 0) * grabbedpik.GetComponent<Rigidbody>().mass;
+            Vector3 horizontalForce = (cursor.transform.position - transform.position).normalized * 65; // 65 = power needed for thrown agent to reach cursor at full extent
+            horizontalForce *= Vector3.Distance(cursor.transform.position, transform.position) / 10; // distance from player to cursor varies between 1 and 10
+            Vector3 throwVector = verticalForce + horizontalForce;
+            grabbedpik.GetComponent<Rigidbody>().AddForce(throwVector, ForceMode.Impulse);
+            
+            throwingSFX.clip = throwClip;
+            throwingSFX.Play();
+            grabbedpik.GetComponent<AgentController>().agentState = AgentState.Midair;
 
-                grabbedpik.GetComponent<AgentController>().throwingWait = true;
-                grabbedpik.GetComponent<AgentController>().agentState = AgentState.Idle;
+            yield return new WaitForSeconds(throwingCooldownTime);
 
-                if (grabbedpik.GetComponentInChildren<AgentInteractor>())
-                    grabbedpik.GetComponentInChildren<AgentInteractor>().interactionSphere.enabled = false;
-                grabbedpik.GetComponent<NavMeshAgent>().enabled = false;
-
-                // apply force to thrown agent: upward + directional towards cursor
-                grabbedpik.GetComponent<Rigidbody>().AddForce(
-                    new Vector3(0, 30, 0) * grabbedpik.GetComponent<Rigidbody>().mass + (cursor.transform.position - transform.position).normalized * 100,
-                    ForceMode.Impulse);
-                throwClip.Play();
-                grabbedpik.GetComponent<AgentController>().agentState = AgentState.Midair;
-
-                yield return new WaitForSeconds(throwingCooldownTime);
-
-                grabbedpik.GetComponent<AgentController>().throwingWait = false;
-                grabbedpik.GetComponent<AgentController>().nonTriggerCollider.enabled = true;
-                throwing = false;
-
-            }
-            else
-            {
-                yield return new WaitForSeconds(0.2f);
-                throwing = false;
-            }
+            grabbedpik.GetComponent<AgentController>().throwingWait = false;
+            grabbedpik.GetComponent<AgentController>().nonTriggerCollider.enabled = true;
+            grabbedpik = null;
+            throwing = false;
         }
+        else
+        {
+            throwing = false;
+        }   
     }
     
+    void setCursorColour(string agentColour)
+    {
+        Color32 cursorColor;
+        if (agentColour == "blue")
+        {
+            cursorColor = new Color(0, 0, 1, 1);
+        }
+        else if (agentColour == "red")
+        {
+            cursorColor = new Color(1, 0, 0, 1);
+        }
+        else if (agentColour == "yellow")
+        {
+            cursorColor = new Color(1, 1, 0, 1);
+        }
+        else
+        {
+            cursorColor = new Color(1, 1, 1, 1);
+        }
+        cursorMesh.GetComponent<MeshRenderer>().material.color = cursorColor; // if using additive: SetColor("_TintColor", cursorColor);
+    }
+
     GameObject[] getAllFollowingAgents()
     {
         List<GameObject> agents = new List<GameObject>();

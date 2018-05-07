@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.AI;
 using System.Linq;
 
 public class GameController : MonoBehaviour {
@@ -81,6 +82,7 @@ public class GameController : MonoBehaviour {
                     }
                 }
                 chosenpik.GetComponent<AgentController>().agentNum = agentnumber;
+                chosenpik.GetComponent<NavMeshAgent>().avoidancePriority = agentnumber;
                 agentnumber += 1;
                 Instantiate(chosenpik, location, Quaternion.identity);
             }
@@ -103,14 +105,14 @@ public class GameController : MonoBehaviour {
         mainUIcanvas = GameObject.FindGameObjectWithTag("MainUI");
         if (!mainUIcanvas)
         {
-            Debug.Log("Main UI canvas object not found");
+            Debug.LogError("Main UI canvas object not found");
         }
         else
         {
             mainUI = GameObject.FindGameObjectWithTag("MainUI").GetComponent<UIController>();
             if (!mainUI)
             {
-                Debug.Log("Main UI script not found");
+                Debug.LogError("Main UI script not found");
             }
         }
         updatePikNumbersAndUI();

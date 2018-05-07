@@ -137,6 +137,14 @@ public class EnemyController : MonoBehaviour {
 
     void Die()
     {
+        if (currenttarget)
+        {
+            if (currenttarget.GetComponent<AgentController>())
+            {
+                currenttarget.GetComponent<AgentController>().agentState = AgentState.Idle;
+            }
+        }
+
         soundPlayer.clip = dieClip1;
         soundPlayer.Play();
 
@@ -182,7 +190,6 @@ public class EnemyController : MonoBehaviour {
     void droploot()
     {
         System.Random lootchance = new System.Random(enemyNum);
-        Debug.Log("dropping loot");
         Transform lootspawnpoint = this.transform;
         Vector3 lootposition = lootspawnpoint.position;
         lootposition.x += 2;
@@ -263,13 +270,15 @@ public class EnemyController : MonoBehaviour {
             {
                 if (currenttarget.GetComponent<AgentController>().agentState == AgentState.Carrying)
                 {
-                    Debug.Log("dropping object due to attack");
                     currenttarget.GetComponent<AgentController>().fetchInteractor().dropobject();
                 }
             }
             // hold target in place
             if (currenttarget.GetComponent<AgentController>().nav && currenttarget.GetComponent<AgentController>().nav.enabled)
+            {
                 currenttarget.GetComponent<AgentController>().nav.destination = currenttarget.transform.position;
+                //currenttarget.GetComponent<AgentController>().nav.enabled = false;
+            }
         }
         // attack animation delay // todo
         yield return new WaitForSeconds(2);
