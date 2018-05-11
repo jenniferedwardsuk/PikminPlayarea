@@ -22,6 +22,7 @@ public class PikController : MonoBehaviour {
     public AudioClip throwClip;
     public AudioClip prepareThrowClip;
     public AudioClip enterWaterClip;
+    public AudioClip unplantClip;
 
     GameController gameController;
     GameObject cursor;
@@ -30,12 +31,18 @@ public class PikController : MonoBehaviour {
     MeshRenderer whistlemesh;
     public bool whistling;
     float whistleTimeout;
+    public Vector3 yellowDismissPosition;
+    public Vector3 redDismissPosition;
+    public Vector3 blueDismissPosition;
 
     bool prepareThrow;
     public bool throwing;
     float throwingCooldownTime = 0.2f;
     GameObject grabbedpik;
     string nearestAgentColor;
+
+    public bool unplanting;
+    float unplantingCooldownTime = 0.2f;
 
     public float distToGround;
     ConstantForce constForce;
@@ -93,7 +100,12 @@ public class PikController : MonoBehaviour {
         if (Input.GetMouseButton(0))
         {
             Turning();
-            if (!throwing && !grabbedpik)
+            GameObject nearestPlantedAgent = getPlantedNearby();
+            if (nearestPlantedAgent && !unplanting)
+            {
+                StartCoroutine(DoUnplant(nearestPlantedAgent));
+            }
+            else if (!throwing && !grabbedpik && !unplanting)
             {
                 prepareThrow = true;
                 StartCoroutine("TryPrepareThrow");
@@ -101,7 +113,7 @@ public class PikController : MonoBehaviour {
         }
         if (!Input.GetMouseButton(0) && !throwing && prepareThrow)
         {
-            StartCoroutine("TryThrow");
+            StartCoroutine(TryThrow());
             prepareThrow = false;
         }
 
@@ -152,6 +164,33 @@ public class PikController : MonoBehaviour {
         }
     }
 
+    GameObject getPlantedNearby()
+    {
+        GameObject nearestPlanted = null;
+        float minDistance = 2;
+        Vector3 playerFlatPosition = this.transform.position;
+        playerFlatPosition.y = 0;
+        
+        // nb: can't reduce this to onion proximity as agents may be planted elsewhere (after battles)
+        GameObject[] allagents = GameObject.FindGameObjectsWithTag("Agent");
+        for (int i = 0; i < allagents.Length; i++)
+        {
+            if (allagents[i].GetComponent<AgentController>().agentState == AgentState.Planted)
+            {
+                Vector3 agentFlatPosition = allagents[i].transform.position;
+                agentFlatPosition.y = 0;
+                float agentDistance = Vector3.Distance(playerFlatPosition, agentFlatPosition);
+                if (agentDistance < minDistance)
+                {
+                    nearestPlanted = allagents[i];
+                    minDistance = agentDistance;
+                }
+            }
+        }
+
+        return nearestPlanted;
+    }
+    
     void activateWhistle()
     {
         if (!whistling)
@@ -198,11 +237,19 @@ public class PikController : MonoBehaviour {
 
     void dismiss()
     {
+        yellowDismissPosition = this.transform.position - this.transform.forward * 6 - this.transform.right * 10;
+        redDismissPosition = this.transform.position - this.transform.forward * 10;
+        blueDismissPosition = this.transform.position - this.transform.forward * 6 + this.transform.right * 10;
+
         GameObject[] followingAgents = getAllFollowingAgents();
+        string firstAgentColour = followingAgents[0].GetComponent<AgentController>().agentColour;
+        bool moveIntoGroups = false;
         for (int i = 0; i < followingAgents.Length; i++)
         {
+            if (followingAgents[i].GetComponent<AgentController>().agentColour != firstAgentColour)
+                moveIntoGroups = true;
             if (followingAgents[i].GetComponent<AgentController>())
-                followingAgents[i].GetComponent<AgentController>().dismiss();
+                followingAgents[i].GetComponent<AgentController>().dismiss(moveIntoGroups, true);
         }
     }
 
@@ -308,7 +355,36 @@ public class PikController : MonoBehaviour {
             throwing = false;
         }   
     }
-    
+
+    IEnumerator DoUnplant(GameObject nearestPlantedAgent)
+    {
+        unplanting = true;
+
+        nearestPlantedAgent.GetComponent<AgentController>().Unplant();
+        nearestPlantedAgent.transform.position += new Vector3(0, 1, 0); // lift agent out of ground
+
+        nearestPlantedAgent.GetComponent<AgentController>().throwingWait = true;
+        nearestPlantedAgent.GetComponent<AgentController>().newUnplant = true;
+        if (nearestPlantedAgent.GetComponentInChildren<AgentInteractor>())
+            nearestPlantedAgent.GetComponentInChildren<AgentInteractor>().interactionSphere.enabled = false;
+        nearestPlantedAgent.GetComponent<NavMeshAgent>().enabled = false;
+
+        // apply force to planted agent
+        Vector3 verticalForce = new Vector3(0, 15, 0) * nearestPlantedAgent.GetComponent<Rigidbody>().mass;
+        Vector3 horizontalForce = (this.transform.position - nearestPlantedAgent.transform.position).normalized * 10; 
+        Vector3 throwVector = verticalForce + horizontalForce;
+        nearestPlantedAgent.GetComponent<Rigidbody>().AddForce(throwVector, ForceMode.Impulse);
+
+        throwingSFX.clip = unplantClip;
+        throwingSFX.Play();
+        nearestPlantedAgent.GetComponent<AgentController>().agentState = AgentState.Midair;
+
+        yield return new WaitForSeconds(unplantingCooldownTime);
+        nearestPlantedAgent.GetComponent<AgentController>().throwingWait = false;
+        unplanting = false;
+    }
+
+
     void setCursorColour(string agentColour)
     {
         Color32 cursorColor;

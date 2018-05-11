@@ -45,7 +45,17 @@ public class AgentInteractor : MonoBehaviour {
         {
             if (agentcontroller.agentState == AgentState.Midair && !agentcontroller.throwingWait) // grounded after midair => just landed
             {
-                agentcontroller.dismiss();
+                if (agentcontroller.newUnplant) // agent was just unplanted
+                {
+                    agentcontroller.agentState = AgentState.Following;
+                    agentcontroller.nonTriggerCollider.enabled = true;
+                    agentcontroller.newUnplant = false;
+                    agentcontroller.gameController.updatePikNumbersAndUI();
+                }
+                else
+                {
+                    agentcontroller.dismiss();
+                }
             }
 
             if (agentcontroller.agentState != AgentState.Idle && agentcontroller.agentState != AgentState.Midair) // idle state expected to set its own destination via dismiss

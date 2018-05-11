@@ -21,19 +21,10 @@ public class IdleUIController : MonoBehaviour {
         this.transform.LookAt(mainCamera.transform);
     }
 
-
-    public void showImage()
+    public void showImage(float transparency)
     {
         Color newColor = idleImage.color;
-        newColor.a = 255;
-        idleImage.color = newColor;
-    }
-
-
-    public void hideImage()
-    {
-        Color newColor = idleImage.color;
-        newColor.a = 0;
+        newColor.a = transparency;
         idleImage.color = newColor;
     }
 }

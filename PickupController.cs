@@ -10,7 +10,7 @@ public class PickupController : MonoBehaviour {
     public float requiredAgents;
     public float maxAgents;
     public float pickupCircleRadius; //to determine size of agents' circle
-    public float seedsGiven;
+    public int seedsGiven;
     public string pickupColor;
     public PickupType pickupType;
     public Vector3 destination;
@@ -100,7 +100,7 @@ public class PickupController : MonoBehaviour {
                 if (Vector3.Distance(flattenedDestination, flattenedPickup) < 0.5f)
                 {
                     done = true;
-                    doCollection();
+                    doCollection(dest);
                 }
                 if (Vector3.Distance(flattenedDestination, flattenedPickup) < minDistance)
                 {
@@ -114,7 +114,7 @@ public class PickupController : MonoBehaviour {
         }
     }
 
-    void doCollection()
+    void doCollection(GameObject destinationObject)
     {
         this.gameObject.tag = "Untagged";
         // remove carrying agents
@@ -129,6 +129,12 @@ public class PickupController : MonoBehaviour {
                 }
             }
         }
+
+        if (destinationObject.transform.parent && destinationObject.transform.parent.gameObject.GetComponent<OnionController>())
+        {
+            destinationObject.transform.parent.gameObject.GetComponent<OnionController>().spawnPikmin(seedsGiven, pickupColor);
+        }
+
         if (this.gameObject.transform.parent) // on enemy bodies the pickup controller is on a child object 
         {
             Destroy(this.gameObject.transform.parent.gameObject);

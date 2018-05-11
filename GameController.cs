@@ -35,7 +35,7 @@ public class GameController : MonoBehaviour {
         System.Random pikchooser = new System.Random();
         int agentnumber = 1;
         int pikColourChoice;
-        for (int i = 0; i < spawnagentcount; i++)
+        for (int i = 0; i < Mathf.Min(spawnagentcount,100); i++)
         {
             pikColourChoice = pikchooser.Next(3) + 1;
             Vector3 point = Random.insideUnitCircle * 5;
@@ -57,34 +57,12 @@ public class GameController : MonoBehaviour {
 
             if (chosenpik)
             {
-                Transform childLeaf = chosenpik.transform.FindDeepChild("PikminLeaf");
-                foreach (Transform child in childLeaf.transform)
-                {
-                    if (child.name == "mesh0")
-                    {
-                        int headChoice = pikchooser.Next(3) + 1;
-                        SkinnedMeshRenderer headmesh = child.gameObject.GetComponent<SkinnedMeshRenderer>();
-                        if (headChoice == 1)
-                        {
-                            headmesh.material = leafmat;
-                            headmesh.sharedMesh = leafmesh;
-                        }
-                        else if (headChoice == 2)
-                        {
-                            headmesh.material = budmat;
-                            headmesh.sharedMesh = budmesh;
-                        }
-                        else if (headChoice == 3)
-                        {
-                            headmesh.material = flowermat;
-                            headmesh.sharedMesh = flowermesh;
-                        }
-                    }
-                }
                 chosenpik.GetComponent<AgentController>().agentNum = agentnumber;
+                chosenpik.GetComponent<NavMeshAgent>().enabled = true;
                 chosenpik.GetComponent<NavMeshAgent>().avoidancePriority = agentnumber;
                 agentnumber += 1;
-                Instantiate(chosenpik, location, Quaternion.identity);
+                GameObject newAgent = Instantiate(chosenpik, location, Quaternion.identity);
+                setAgentHeadMesh(newAgent, true);
             }
         }
 
@@ -118,6 +96,34 @@ public class GameController : MonoBehaviour {
         updatePikNumbersAndUI();
     }
     
+    public void setAgentHeadMesh(GameObject chosenpik, bool randomise)
+    {
+        Transform childLeaf = chosenpik.transform.FindDeepChild("PikminLeaf");
+        foreach (Transform child in childLeaf.transform)
+        {
+            if (child.name == "mesh0")
+            {
+                int headChoice = Random.Range((int)1,(int)4);
+                SkinnedMeshRenderer headmesh = child.gameObject.GetComponent<SkinnedMeshRenderer>();
+                if (headChoice == 1 || !randomise)
+                {
+                    headmesh.material = leafmat;
+                    headmesh.sharedMesh = leafmesh;
+                }
+                else if (headChoice == 2)
+                {
+                    headmesh.material = budmat;
+                    headmesh.sharedMesh = budmesh;
+                }
+                else if (headChoice == 3)
+                {
+                    headmesh.material = flowermat;
+                    headmesh.sharedMesh = flowermesh;
+                }
+            }
+        }
+    }
+
     void Update() {
 
     }

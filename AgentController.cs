@@ -37,6 +37,7 @@ public class AgentController : MonoBehaviour
     public AgentState defaultAgentState;
     [HideInInspector] public float distToGround;
     public bool throwingWait;
+    public bool newUnplant;
 
     public IdleUIController idleUIController;
     AgentIdleAnims randomIdleAnim = AgentIdleAnims.None;
@@ -86,60 +87,14 @@ public class AgentController : MonoBehaviour
     void Update()
     {
         if (agentState != AgentState.Following 
-            && agentState != AgentState.Immobilised && agentState != AgentState.Drowning && agentState != AgentState.Dying
+            && agentState != AgentState.Immobilised && agentState != AgentState.Drowning && agentState != AgentState.Dying && agentState != AgentState.Planted
             && nav.enabled && agentTarget != nav.destination)
         {
             nav.SetDestination(agentTarget);
         }
         else if (player && agentState == AgentState.Following && nav.enabled)
         {
-            agentTarget = this.transform.position;
-            nav.speed = player.GetComponent<PikController>().speed - 0.2f;
-            if (!navPaused)
-                agentTarget = player.position;
-
-            // dismiss if player too far away
-            Vector3 flatposition = this.transform.position;
-            flatposition.y = 0f;
-            Vector3 flatplayerposition = player.position;
-            flatplayerposition.y = 0f;
-            if (Vector3.Distance(flatposition, flatplayerposition) > 50)
-            {
-                dismiss();
-            }
-
-            // stop pursuing if path to reach player is too long
-            NavMeshPath path = new NavMeshPath();
-            bool targetReachable = false;
-            if (navCalcTime >= 1) // performance saving: only check once per second
-            {
-                if (navPaused)
-                    agentTarget = player.position;
-                targetReachable = nav.CalculatePath(agentTarget, path);
-                navCalcTime = 0;
-            }
-            else
-            {
-                navCalcTime += Time.deltaTime;
-            }
-            if (targetReachable)
-            {
-                float pathDistance = 0;
-                for (int i = 0; i < path.corners.Length - 2; i++)
-                {
-                    pathDistance += Vector3.Distance(path.corners[i], path.corners[i + 1]);
-                }
-                if (pathDistance > 50)
-                {
-                    agentTarget = this.transform.position;
-                    navPaused = true;
-                }
-                else
-                {
-                    navPaused = false;
-                }
-            }
-            nav.SetDestination(agentTarget);
+            TryFollowPlayer();           
         }
 
         if (drownDetectionCooldown > 0)
@@ -158,12 +113,68 @@ public class AgentController : MonoBehaviour
         StartCoroutine(Animating());
     }
 
-    public void dismiss()
+    void TryFollowPlayer()
     {
-        dismiss(true); // play sound by default
+        agentTarget = this.transform.position;
+        nav.speed = player.GetComponent<PikController>().speed - 0.2f;
+        if (!navPaused)
+            agentTarget = player.position;
+
+        // dismiss if player too far away
+        Vector3 flatposition = this.transform.position;
+        flatposition.y = 0f;
+        Vector3 flatplayerposition = player.position;
+        flatplayerposition.y = 0f;
+        if (Vector3.Distance(flatposition, flatplayerposition) > 50)
+        {
+            dismiss();
+        }
+
+        // stop pursuing if path to reach player is too long
+        NavMeshPath path = new NavMeshPath();
+        bool targetReachable = false;
+        if (navCalcTime >= 1) // performance saving: only check once per second
+        {
+            if (navPaused)
+                agentTarget = player.position;
+            targetReachable = nav.CalculatePath(agentTarget, path);
+            navCalcTime = 0;
+        }
+        else
+        {
+            navCalcTime += Time.deltaTime;
+        }
+        if (targetReachable)
+        {
+            float pathDistance = 0;
+            for (int i = 0; i < path.corners.Length - 2; i++)
+            {
+                pathDistance += Vector3.Distance(path.corners[i], path.corners[i + 1]);
+            }
+            if (pathDistance > 50)
+            {
+                agentTarget = this.transform.position;
+                navPaused = true;
+            }
+            else
+            {
+                navPaused = false;
+            }
+        }
+        nav.SetDestination(agentTarget);
     }
 
-    public void dismiss(bool playSound)
+    public void dismiss()
+    {
+        dismiss(false, true); // don't group by default, do play sound by default
+    }
+
+    public void dismiss(bool moveIntoGroups)
+    {
+        dismiss(moveIntoGroups, true); // play sound by default
+    }
+
+    public void dismiss(bool moveIntoGroups, bool playSound)
     {
         if (playSound)
         {
@@ -183,13 +194,25 @@ public class AgentController : MonoBehaviour
         }
 
         if (agentColour == "blue")
+        {
             smr.material = greyblueTex;
+            if (moveIntoGroups)
+                agentTarget = player.GetComponent<PikController>().blueDismissPosition;
+        }
         else if (agentColour == "yellow")
+        {
             smr.material = greyyellowTex;
+            if (moveIntoGroups)
+                agentTarget = player.GetComponent<PikController>().yellowDismissPosition;
+        }
         else
+        {
             smr.material = greyredTex;
+            if (moveIntoGroups)
+                agentTarget = player.GetComponent<PikController>().redDismissPosition;
+        }
 
-        idleUIController.showImage();
+        idleUIController.showImage(255);
         gameController.updatePikNumbersAndUI();
     }
 
@@ -277,7 +300,7 @@ public class AgentController : MonoBehaviour
                 rb.velocity = new Vector3(0, 0, 0);
         }
 
-        if (gameController.isGrounded(this.gameObject, distToGround) && !nav.enabled && !throwingWait) //has just landed after being thrown
+        if (gameController.isGrounded(this.gameObject, distToGround) && !nav.enabled && !throwingWait && agentState != AgentState.Planted) //has just landed after being thrown
         {
             gravforce = new Vector3(0, 0, 0);
             this.GetComponent<ConstantForce>().force = gravforce;
@@ -285,7 +308,7 @@ public class AgentController : MonoBehaviour
                 dismiss();
             nav.enabled = true;
         }
-        else if (!gameController.isGrounded(this.gameObject, distToGround) && !nav.enabled) //is in midair after being thrown
+        else if (!gameController.isGrounded(this.gameObject, distToGround) && !nav.enabled && agentState != AgentState.Planted) //is in midair after being thrown
         {
             gravforce.y -= 10;
             if (gravforce.y < -100)
@@ -294,7 +317,28 @@ public class AgentController : MonoBehaviour
         }
     }
 
-    
+    public void Plant()
+    {
+        nav.enabled = false;
+        rb.isKinematic = true;
+        nonTriggerCollider.enabled = false;
+        agentState = AgentState.Planted;
+        idleUIController.showImage(255);
+        //newAgent.transform.localScale = new Vector3(0.01f, 0.01f, 0.01f);
+
+        // todo: sfx
+    }
+    public void Unplant()
+    {
+        nav.enabled = true;
+        rb.isKinematic = false;
+        nonTriggerCollider.enabled = true;
+        agentState = AgentState.Following;
+        idleUIController.showImage(0);
+
+        // todo: sfx
+    }
+
     private void OnTriggerEnter(Collider other)
     {
         // ignore interaction sphere collisions - only want agent body collisions
@@ -305,7 +349,7 @@ public class AgentController : MonoBehaviour
         {
             // whistle collision
             if (other.gameObject.tag == "Whistle" && player && player.GetComponent<PikController>().whistling 
-                && agentState != AgentState.Immobilised && agentState != AgentState.Drowning)
+                && agentState != AgentState.Immobilised && agentState != AgentState.Drowning && agentState != AgentState.Dying && agentState != AgentState.Planted)
             {
                 if (agentState != AgentState.Following)
                 {
@@ -387,7 +431,7 @@ public class AgentController : MonoBehaviour
             {
                 if (!drowning)
                 {
-                    dismiss(false);
+                    dismiss(false, false);
                     agentState = AgentState.Drowning;
                     StartCoroutine(Drown(waterBody));
                     yield return new WaitForSeconds(0.25f);
@@ -492,13 +536,10 @@ public class AgentController : MonoBehaviour
         }
         drowning = false;
     }
-
-    int errornum = 1;
+    
     [HideInInspector]public bool rescuing;
     public IEnumerator WaterRescue(GameObject drowningAgent)
     {
-        Debug.Log(errornum + " trying rescue");
-        errornum++;
         rescuing = true;
         float navStopDist = nav.stoppingDistance;
         while (this.agentColour == "blue" && agentState == AgentState.Idle
@@ -567,7 +608,7 @@ public class AgentController : MonoBehaviour
         else
             smr.material = redTex;
 
-        idleUIController.hideImage();
+        idleUIController.showImage(0);
     }
 
     //position to be used as the nav's destination when the agent is grounded and ready
