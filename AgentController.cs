@@ -38,6 +38,7 @@ public class AgentController : MonoBehaviour
     [HideInInspector] public float distToGround;
     public bool throwingWait;
     public bool newUnplant;
+    public float agentDamage = 10;
 
     public IdleUIController idleUIController;
     AgentIdleAnims randomIdleAnim = AgentIdleAnims.None;

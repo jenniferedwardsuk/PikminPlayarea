@@ -12,6 +12,7 @@ public class AgentInteractor : MonoBehaviour {
     float currentcooldowntime;
     float agentFullSpeed;
     Vector3 agentDestination;
+    float agentDamage;
 
     float timeSpentFetching;
     
@@ -38,6 +39,14 @@ public class AgentInteractor : MonoBehaviour {
         currentcooldowntime = attackcooldowntime * 0.5f;
         navStopDistanceBackup = agentnav.stoppingDistance;
         agentFullSpeed = agentnav.speed;
+        if (agentcontroller)
+        {
+            agentDamage = agentcontroller.agentDamage;
+        }
+        else
+        {
+            agentDamage = 10;
+        }
     }
 	
 	void Update () {
@@ -186,7 +195,7 @@ public class AgentInteractor : MonoBehaviour {
                         agentcontroller.soundPlayer.clip = agentcontroller.attackClip;
                         agentcontroller.soundPlayer.Play();
                     }
-                    attacktargetcontroller.health = attacktargetcontroller.health - 1;
+                    attacktargetcontroller.health = attacktargetcontroller.health - agentDamage;
                 }
                 currentcooldowntime = attackcooldowntime;
             }
@@ -214,7 +223,7 @@ public class AgentInteractor : MonoBehaviour {
                         agentcontroller.soundPlayer.clip = agentcontroller.attackClip;
                         agentcontroller.soundPlayer.Play();
                     }
-                    attacktargetcontroller.health = attacktargetcontroller.health - 1;
+                    attacktargetcontroller.health = attacktargetcontroller.health - agentDamage;
                 }
                 currentcooldowntime = attackcooldowntime;
             }
