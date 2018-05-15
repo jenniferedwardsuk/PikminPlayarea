@@ -140,17 +140,10 @@ public class PikController : MonoBehaviour {
             whistleTimeout = 0;
         }
 
-        float h = Input.GetAxisRaw("Horizontal");
-        float v = Input.GetAxisRaw("Vertical");
-        Move(h, v);
-        // Animate the player.
-        Animating(h, v);
     }
 
     void FixedUpdate()
     {
-        if (rb)
-            rb.velocity = new Vector3(0, 0, 0); //prevent collision interference with player-controlled movement
 
         if (!gameController.isGrounded(this.gameObject, distToGround))
         {
@@ -162,6 +155,15 @@ public class PikController : MonoBehaviour {
         {
             constForce.force = new Vector3(0, -20, 0);
         }
+
+        float h = Input.GetAxisRaw("Horizontal");
+        float v = Input.GetAxisRaw("Vertical");
+        
+        if (rb)
+            rb.velocity = new Vector3(0, 0, 0); // prevent collision interference with player-controlled movement
+
+        Move(h, v);
+        Animating(h, v);
     }
 
     GameObject getPlantedNearby()
@@ -234,6 +236,7 @@ public class PikController : MonoBehaviour {
             miscSoundPlayer.clip = null; // todo: choose footstep SFX
         }
     }
+    
 
     void dismiss()
     {
@@ -256,11 +259,35 @@ public class PikController : MonoBehaviour {
         }
     }
 
+    Vector3 StopIfWall(Vector3 movementDirection)
+    {
+        Vector3 newMovementDirection = movementDirection;
+        Vector3 destinationPoint = this.transform.position + movementDirection;
+        int floorMask = LayerMask.GetMask("Floor");
+        RaycastHit floorHit;
+        bool hitfloor = Physics.Raycast(this.transform.position, destinationPoint - this.transform.position, out floorHit, 1f, floorMask);
+        if (hitfloor)
+        {
+            if (floorHit.collider.gameObject.tag == "Wall")
+            {
+                newMovementDirection = new Vector3(0, 0, 0);
+            }
+        }
+        return newMovementDirection;
+    }
+
     void Move(float h, float v)
     {
         movement = transform.forward * v + transform.right * h;
         movement = movement.normalized * speed * Time.deltaTime;
+        movement = StopIfWall(movement);
         this.transform.localPosition += movement;
+
+        if (movement.x == 0 && movement.y == 0 && movement.z == 0)
+        {
+            h = 0;
+            v = 0;
+        }
 
         // save latest rotation when moving or turning
         if (h != 0 || v != 0) 
