@@ -151,7 +151,8 @@ public class EnemyController : MonoBehaviour {
         droploot();
 
         // only movable enemies have these components
-        if (nav)
+        float distToGround = 0;
+        if (nav && nav.enabled)
         {
             nav.SetDestination(this.transform.position);
             nav.isStopped = true;
@@ -161,7 +162,9 @@ public class EnemyController : MonoBehaviour {
         if (GetComponent<SphereCollider>())
             GetComponent<SphereCollider>().enabled = false;
         if (GetComponent<BoxCollider>())
+        {
             GetComponent<BoxCollider>().enabled = false;
+        }
 
         // flip enemy over  // todo: death animation instead
         if (animatorDyingExists)
@@ -182,6 +185,8 @@ public class EnemyController : MonoBehaviour {
             enemyBody.tag = "Pickup";
             if (enemyBody.GetComponent<CapsuleCollider>())
                 enemyBody.GetComponent<CapsuleCollider>().enabled = true;
+            if (enemyBody.GetComponent<NavMeshObstacle>())
+                enemyBody.GetComponent<NavMeshObstacle>().enabled = true;
         }
         this.gameObject.tag = "Untagged";
         Destroy(this);

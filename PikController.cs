@@ -242,14 +242,17 @@ public class PikController : MonoBehaviour {
         blueDismissPosition = this.transform.position - this.transform.forward * 6 + this.transform.right * 10;
 
         GameObject[] followingAgents = getAllFollowingAgents();
-        string firstAgentColour = followingAgents[0].GetComponent<AgentController>().agentColour;
-        bool moveIntoGroups = false;
-        for (int i = 0; i < followingAgents.Length; i++)
+        if (followingAgents.Length > 0)
         {
-            if (followingAgents[i].GetComponent<AgentController>().agentColour != firstAgentColour)
-                moveIntoGroups = true;
-            if (followingAgents[i].GetComponent<AgentController>())
-                followingAgents[i].GetComponent<AgentController>().dismiss(moveIntoGroups, true);
+            string firstAgentColour = followingAgents[0].GetComponent<AgentController>().agentColour;
+            bool moveIntoGroups = false;
+            for (int i = 0; i < followingAgents.Length; i++)
+            {
+                if (followingAgents[i].GetComponent<AgentController>().agentColour != firstAgentColour)
+                    moveIntoGroups = true;
+                if (followingAgents[i].GetComponent<AgentController>())
+                    followingAgents[i].GetComponent<AgentController>().dismiss(moveIntoGroups, true);
+            }
         }
     }
 

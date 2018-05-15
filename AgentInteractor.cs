@@ -369,13 +369,17 @@ public class AgentInteractor : MonoBehaviour {
     void dopickup(GameObject target)
     {
         // disable collisions on pickup object
+        Transform enemyBody = target.transform.parent;
         if (target.GetComponent<Rigidbody>()) // for basic pickups
+            target.GetComponent<Rigidbody>().constraints = RigidbodyConstraints.FreezePosition | RigidbodyConstraints.FreezeRotation;
+        if (target.GetComponent<NavMeshObstacle>())
+            target.GetComponent<NavMeshObstacle>().enabled = false;
+        if (enemyBody) // for enemy body pickups
         {
-            target.GetComponent<Rigidbody>().constraints = RigidbodyConstraints.FreezePosition | RigidbodyConstraints.FreezeRotation;//RigidbodyConstraints.FreezePositionX | RigidbodyConstraints.FreezePositionY | RigidbodyConstraints.FreezePositionZ;
-        }
-        if (target.transform.parent && target.transform.parent.gameObject.GetComponent<Rigidbody>()) // for enemy body pickups
-        {
-            target.transform.parent.gameObject.GetComponent<Rigidbody>().constraints = RigidbodyConstraints.FreezePosition | RigidbodyConstraints.FreezeRotation; //RigidbodyConstraints.FreezePositionX | RigidbodyConstraints.FreezePositionY | RigidbodyConstraints.FreezePositionZ;
+            if (enemyBody.gameObject.GetComponent<Rigidbody>())
+                enemyBody.gameObject.GetComponent<Rigidbody>().constraints = RigidbodyConstraints.FreezePosition | RigidbodyConstraints.FreezeRotation;
+            if (enemyBody.GetComponent<NavMeshObstacle>())
+                enemyBody.GetComponent<NavMeshObstacle>().enabled = false;
         }
 
         // lift up object
@@ -470,13 +474,22 @@ public class AgentInteractor : MonoBehaviour {
             }
 
             // reset pickup's rigidbody constraints
-            if (pickuptarget.GetComponent<Rigidbody>())
+            Transform enemyBody = pickuptarget.transform.parent;
+            if (pickuptarget.GetComponent<Rigidbody>()) // basic pickups
             {
                 pickuptarget.GetComponent<Rigidbody>().constraints = RigidbodyConstraints.None;
             }
-            if (pickuptarget.transform.parent.GetComponent<Rigidbody>())
+            if (pickuptarget.GetComponent<NavMeshObstacle>())
+                pickuptarget.GetComponent<NavMeshObstacle>().enabled = true;
+            if (enemyBody) // enemy pickups
             {
-                pickuptarget.transform.parent.GetComponent<Rigidbody>().constraints = RigidbodyConstraints.None;
+                if (enemyBody.GetComponent<Rigidbody>())
+                {
+                    enemyBody.GetComponent<Rigidbody>().constraints = RigidbodyConstraints.None;
+                    enemyBody.GetComponent<Rigidbody>().isKinematic = false;
+                }
+                if (enemyBody.GetComponent<NavMeshObstacle>())
+                    enemyBody.GetComponent<NavMeshObstacle>().enabled = true;
             }
         }
         resetNav();
