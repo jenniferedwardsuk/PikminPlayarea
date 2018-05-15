@@ -59,6 +59,7 @@ public class AgentController : MonoBehaviour
     bool navPaused;
 
     float drownTime;
+    float drownEndTime;
     float drownDetectionCooldown;
     bool checkingDrown;
     bool drowning;
@@ -467,7 +468,10 @@ public class AgentController : MonoBehaviour
         Vector3 waterLevelAgentPosition = this.transform.position;
         waterLevelAgentPosition.y = waterBody.transform.position.y - 0.2f;
         this.transform.position = waterLevelAgentPosition;
+        if (gameController.isGrounded(this.gameObject, distToGround))
+            this.transform.position = Vector3.Lerp(this.transform.position, this.transform.position + waterBody.transform.position.normalized / 4, 0.15f);
         drownTime = 0;
+        drownEndTime = Time.fixedTime + 5;
 
         while (Vector3.Distance(waterBody.GetComponent<MeshCollider>().ClosestPoint(waterLevelAgentPosition), waterLevelAgentPosition) < 1 
             && (!gameController.isGrounded(this.gameObject, distToGround)
@@ -475,7 +479,7 @@ public class AgentController : MonoBehaviour
         {
             if (!grabbedByBlue)
             {
-                // move agent towards water surface and away from water border
+                // move agent towards water surface
                 waterLevelAgentPosition = this.transform.position;
                 waterLevelAgentPosition.y = waterBody.transform.position.y - 0.2f;
                 this.transform.position = waterLevelAgentPosition;
@@ -492,9 +496,8 @@ public class AgentController : MonoBehaviour
             triggerCollider.enabled = false;
             yield return new WaitForSeconds(0.05f);
             triggerCollider.enabled = true;
-
-            drownTime += Time.deltaTime;
-            if (drownTime >= 0.8f) // equates to approx five seconds due to time delay of collider toggle
+            
+            if (drownEndTime < Time.fixedTime)
             {
                 agentTarget = this.transform.position;
                 agentState = AgentState.Dying;
