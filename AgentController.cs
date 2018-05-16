@@ -206,19 +206,26 @@ public class AgentController : MonoBehaviour
                 
                 nav.stoppingDistance = 0;
                 if (Input.GetKey(KeyCode.RightArrow))
-                    newMovingTarget += adjustedCamera.right * Time.deltaTime * nav.speed;
+                    newMovingTarget += adjustedCamera.right * Time.deltaTime * nav.speed * 5;
                 if (Input.GetKey(KeyCode.LeftArrow))
-                    newMovingTarget -= adjustedCamera.right * Time.deltaTime * nav.speed;
+                    newMovingTarget -= adjustedCamera.right * Time.deltaTime * nav.speed * 5;
                 if (Input.GetKey(KeyCode.UpArrow))
-                    newMovingTarget += adjustedCamera.forward * Time.deltaTime * nav.speed;
+                    newMovingTarget += adjustedCamera.forward * Time.deltaTime * nav.speed * 5;
                 if (Input.GetKey(KeyCode.DownArrow))
-                    newMovingTarget -= adjustedCamera.forward * Time.deltaTime * nav.speed;
+                    newMovingTarget -= adjustedCamera.forward * Time.deltaTime * nav.speed * 5;
                 newMovingTarget.y = agentTarget.y;
 
-                if (Vector3.Distance(newMovingTarget, player.transform.position) > 10) // cap new target to radius around player
+                float targetDistance = Vector3.Distance(newMovingTarget, player.transform.position);
+                float currentDistance = Vector3.Distance(this.transform.position, player.transform.position);
+                if (targetDistance > 10) // cap new target to radius around player
                 {
                     newMovingTarget = player.transform.position + (newMovingTarget - player.transform.position).normalized * 10;
                 }
+                if (currentDistance > 15) // cap new target to radius around player
+                {
+                    newMovingTarget = this.transform.position;
+                }
+
                 movingAgentTarget = newMovingTarget;
                 agentTarget = movingAgentTarget;
 
