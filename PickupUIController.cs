@@ -27,10 +27,9 @@ public class PickupUIController : MonoBehaviour {
 	void Update ()
     {
         //place canvas above pickup and point at camera
-        //Vector3 pickupPosition = pickupTransform.position;
-        //pickupPosition.x = 0;
-        //Vector3 UIposition = new Vector3(0, pickupPosition.z * -1/2, pickupPosition.x * -1/2);
-        //this.transform.position = UIposition;
+        Vector3 independentPosition = this.transform.root.position;
+        independentPosition.y += 4;
+        this.transform.position = independentPosition;
         this.transform.LookAt(mainCamera.transform);
         if (!pickupController)
         {
