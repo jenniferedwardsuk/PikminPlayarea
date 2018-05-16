@@ -29,9 +29,24 @@ public class GameController : MonoBehaviour {
     int _fieldPiksCount;
     int _totalPiksCount;
 
+    GameObject player;
+    [HideInInspector] public Vector3 yellowWaitPosition;
+    [HideInInspector] public Vector3 redWaitPosition;
+    [HideInInspector] public Vector3 blueWaitPosition;
+
+    [HideInInspector] public Transform mainCamera;
+    [HideInInspector] public GameObject copyCameraObject;
+
     void Start()
     {
-        //spawn subordinate pikmin
+        // create camera transform duplicate for agents to navigate around
+        mainCamera = GameObject.FindGameObjectWithTag("MainCamera").transform;
+        copyCameraObject = Instantiate(mainCamera.parent.gameObject);
+        Destroy(copyCameraObject.GetComponentInChildren<Camera>().gameObject);
+
+        player = GameObject.FindGameObjectWithTag("Player");
+
+        // spawn subordinate pikmin
         System.Random pikchooser = new System.Random();
         int agentnumber = 1;
         int pikColourChoice;
@@ -173,6 +188,43 @@ public class GameController : MonoBehaviour {
             }
         }
         return agent;
+    }
+
+    Vector3 playerThrowingPosition = new Vector3(0,10,0);
+    public void setAgentPositionsForThrowing(string heldColour)
+    {
+        if (!player)
+            player = GameObject.FindGameObjectWithTag("Player");
+        if (player
+            && (Mathf.Abs(player.transform.position.x - playerThrowingPosition.x)>0.1f
+            || Mathf.Abs(player.transform.position.y - playerThrowingPosition.y) > 0.1f
+            || Mathf.Abs(player.transform.position.z - playerThrowingPosition.z) > 0.1f))
+        {
+            playerThrowingPosition = player.transform.position;
+            Vector3 position1 = player.transform.position;// - player.transform.forward * 2;
+            Vector3 position2 = player.transform.position - player.transform.forward * 3;
+            Vector3 position3 = player.transform.position - player.transform.forward * 6;
+
+            switch (heldColour)
+            {
+                case "yellow":
+                    yellowWaitPosition = position1;
+                    redWaitPosition = position2;
+                    blueWaitPosition = position3;
+                    break;
+                case "red":
+                    yellowWaitPosition = position3;
+                    redWaitPosition = position1;
+                    blueWaitPosition = position2;
+                    break;
+                default:
+                    yellowWaitPosition = position2;
+                    redWaitPosition = position3;
+                    blueWaitPosition = position1;
+                    break;
+            }
+        }
+
     }
 
     public void updatePikNumbersAndUI()

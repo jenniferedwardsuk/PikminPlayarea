@@ -53,11 +53,14 @@ public class AgentController : MonoBehaviour
     public Material greyredTex;
     public Material greyyellowTex;
 
-    [HideInInspector]public Vector3 agentTarget; // nav destination
+    [HideInInspector] public Vector3 agentTarget; // nav destination
+    Vector3 movingAgentTarget;
     Quaternion lastRotation;
+    bool agentControlled;
 
     float navCalcTime;
     bool navPaused;
+    float navStopDistanceBackup = 0;
 
     float drownTime;
     float drownEndTime;
@@ -68,7 +71,9 @@ public class AgentController : MonoBehaviour
     void Awake()
     {
         // Set up the references.
-        player = GameObject.FindGameObjectWithTag("Player").transform;
+        GameObject playerObject = GameObject.FindGameObjectWithTag("Player");
+        if (playerObject)
+            player = playerObject.transform;
         gameController = GameObject.FindGameObjectWithTag("GameController").GetComponent<GameController>();
 
         nav = GetComponent<UnityEngine.AI.NavMeshAgent>();
@@ -79,9 +84,12 @@ public class AgentController : MonoBehaviour
         agentState = AgentState.Following;
         distToGround = triggerCollider.bounds.extents.y;
         agentTarget = this.transform.position;
+        movingAgentTarget = agentTarget;
         agentState = defaultAgentState;
         navCalcTime = 0;
         navPaused = false;
+        if (nav)
+            navStopDistanceBackup = nav.stoppingDistance;
 
         drownDetectionCooldown = 0;
     }
@@ -96,7 +104,11 @@ public class AgentController : MonoBehaviour
         }
         else if (player && agentState == AgentState.Following && nav.enabled)
         {
-            TryFollowPlayer();           
+            TryFollowPlayer();
+            if (agentState == AgentState.Following)
+            {
+                this.transform.LookAt(player.transform);
+            }
         }
 
         if (drownDetectionCooldown > 0)
@@ -118,7 +130,7 @@ public class AgentController : MonoBehaviour
     void TryFollowPlayer()
     {
         agentTarget = this.transform.position;
-        nav.speed = player.GetComponent<PikController>().speed - 0.2f;
+        nav.speed = player.GetComponent<PikController>().speed - 0.2f; // todo - adjust depending on head type
         if (!navPaused)
             agentTarget = player.position;
 
@@ -163,6 +175,63 @@ public class AgentController : MonoBehaviour
                 navPaused = false;
             }
         }
+
+        // if player is preparing to throw, organise agents by colour accordingly
+        if (agentTarget == player.position
+            && player.GetComponent<PikController>() && player.GetComponent<PikController>().grabbedpik
+            && this.gameObject != player.GetComponent<PikController>().grabbedpik)
+        {
+            nav.stoppingDistance = 0;
+            if (agentColour == "yellow")
+                agentTarget = gameController.yellowWaitPosition;
+            else if (agentColour == "red")
+                agentTarget = gameController.redWaitPosition;
+            else
+                agentTarget = gameController.blueWaitPosition;
+        }
+        else
+        {
+            // if player is holding normal arrows, direct agents accordingly
+            if (gameController.copyCameraObject
+                && (Input.GetKey(KeyCode.RightArrow) || Input.GetKey(KeyCode.UpArrow) || Input.GetKey(KeyCode.LeftArrow) || Input.GetKey(KeyCode.DownArrow)))
+            {
+                agentControlled = true;
+                Vector3 newMovingTarget = movingAgentTarget;
+                Transform adjustedCamera = gameController.copyCameraObject.transform;
+                adjustedCamera.position = gameController.mainCamera.position;
+                adjustedCamera.rotation = gameController.mainCamera.rotation;
+                Vector3 adjustedCameraRotation = adjustedCamera.eulerAngles;
+                adjustedCameraRotation.x = 0;
+                adjustedCamera.eulerAngles = adjustedCameraRotation;
+                
+                nav.stoppingDistance = 0;
+                if (Input.GetKey(KeyCode.RightArrow))
+                    newMovingTarget += adjustedCamera.right * Time.deltaTime * nav.speed;
+                if (Input.GetKey(KeyCode.LeftArrow))
+                    newMovingTarget -= adjustedCamera.right * Time.deltaTime * nav.speed;
+                if (Input.GetKey(KeyCode.UpArrow))
+                    newMovingTarget += adjustedCamera.forward * Time.deltaTime * nav.speed;
+                if (Input.GetKey(KeyCode.DownArrow))
+                    newMovingTarget -= adjustedCamera.forward * Time.deltaTime * nav.speed;
+                newMovingTarget.y = agentTarget.y;
+
+                if (Vector3.Distance(newMovingTarget, player.transform.position) > 10) // cap new target to radius around player
+                {
+                    newMovingTarget = player.transform.position + (newMovingTarget - player.transform.position).normalized * 10;
+                }
+                movingAgentTarget = newMovingTarget;
+                agentTarget = movingAgentTarget;
+
+                //todo: sfx
+            }
+            else
+            {
+                agentControlled = false;
+                nav.stoppingDistance = navStopDistanceBackup;
+                movingAgentTarget = agentTarget;
+            }
+        }
+
         nav.SetDestination(agentTarget);
     }
 
@@ -349,6 +418,14 @@ public class AgentController : MonoBehaviour
                 || (other.GetType() == typeof(MeshCollider) && ((MeshCollider)other).convex)) // types that can use ClosestPoint
             && Vector3.Distance(other.ClosestPoint(this.transform.position), this.transform.position) < 1) 
         {
+            if (agentControlled)
+            {
+                agentControlled = false;
+                nav.stoppingDistance = navStopDistanceBackup;
+                movingAgentTarget = agentTarget;
+                dismiss();
+            }
+
             // whistle collision
             if (other.gameObject.tag == "Whistle" && player && player.GetComponent<PikController>().whistling 
                 && agentState != AgentState.Immobilised && agentState != AgentState.Drowning && agentState != AgentState.Dying && agentState != AgentState.Planted)

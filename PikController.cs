@@ -38,7 +38,7 @@ public class PikController : MonoBehaviour {
     bool prepareThrow;
     public bool throwing;
     float throwingCooldownTime = 0.2f;
-    GameObject grabbedpik;
+    [HideInInspector] public GameObject grabbedpik;
     string nearestAgentColor;
 
     public bool unplanting;
@@ -72,11 +72,13 @@ public class PikController : MonoBehaviour {
     {
         if (grabbedpik)
         {
-            if (nearestAgentColor != grabbedpik.GetComponent<AgentController>().agentColour)
+            string heldAgentColour = grabbedpik.GetComponent<AgentController>().agentColour;
+            if (nearestAgentColor != heldAgentColour)
             {
-                nearestAgentColor = grabbedpik.GetComponent<AgentController>().agentColour;
+                nearestAgentColor = heldAgentColour;
                 setCursorColour(nearestAgentColor);
             }
+            gameController.setAgentPositionsForThrowing(heldAgentColour);
         }
         else
         {
@@ -156,8 +158,13 @@ public class PikController : MonoBehaviour {
             constForce.force = new Vector3(0, -20, 0);
         }
 
-        float h = Input.GetAxisRaw("Horizontal");
-        float v = Input.GetAxisRaw("Vertical");
+        float h = 0;
+        float v = 0;
+
+        if (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.D))
+            h = Input.GetAxisRaw("Horizontal");
+        else if (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.S))
+            v = Input.GetAxisRaw("Vertical");
         
         if (rb)
             rb.velocity = new Vector3(0, 0, 0); // prevent collision interference with player-controlled movement
@@ -306,7 +313,8 @@ public class PikController : MonoBehaviour {
         }
         else
         {
-            transform.rotation = lastRotation; // lock player rotation when standing still
+            if (!Input.GetMouseButton(0))
+                transform.rotation = lastRotation; // lock player rotation when standing still if not holding mouse button to look at cursor
         }
         
     }
